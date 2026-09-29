@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arbitrage-poly"
+version = "0.1.0"
+description = "Observateur paper trading Polymarket BTC"
+requires-python = ">=3.11"
+dependencies = [
+    "tqdm>=4.66,<5",
+    "websockets>=12,<16",
+]
+
+[project.scripts]
+arbitrage-poly-backtest = "arbitrage_poly.apps.backtest:main"
+arbitrage-poly-binance-windows = "arbitrage_poly.apps.binance_windows:main"
+arbitrage-poly-calibration = "arbitrage_poly.apps.calibration:main"
+arbitrage-poly-market-price = "arbitrage_poly.apps.market_price:main"
+arbitrage-poly-market-prices = "arbitrage_poly.apps.market_prices_jsonl:main"
+arbitrage-poly-live = "arbitrage_poly.apps.live_cli:main"
+arbitrage-poly-live-decisions = "arbitrage_poly.apps.live_decisions:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<9",
+    "pytest-asyncio>=0.23,<1",
+    "ruff>=0.6,<1",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
