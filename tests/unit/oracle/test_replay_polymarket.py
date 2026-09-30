@@ -15,7 +15,7 @@ def _write_ticks(path) -> None:
         writer.writeheader()
         rows = [
             ("1", "100"),
-            ("239_000_000_000", "101"),
+            ("179_000_000_000", "101"),
             ("299_000_000_000", "102"),
             ("300_000_000_000", "102"),
         ]
@@ -59,7 +59,7 @@ def test_replay_prices_a_window_with_polymarket_history(tmp_path) -> None:
 
     def _prices(url, params):
         price = 0.60 if params["market"] == "up-token" else 0.35
-        return {"history": [{"t": 235, "p": price}]}
+        return {"history": [{"t": 175, "p": price}]}
 
     price_client = ClobHistoricalPriceClient(client=_rest_client(_prices))
 
@@ -98,7 +98,7 @@ def test_replay_rejects_a_price_in_the_uncertain_band(tmp_path) -> None:
         # (0.55) falls inside the default [0.45, 0.55] uncertain band, so no
         # bet should be placed even though the edge would otherwise qualify.
         price = 0.55 if params["market"] == "up-token" else 0.42
-        return {"history": [{"t": 235, "p": price}]}
+        return {"history": [{"t": 175, "p": price}]}
 
     price_client = ClobHistoricalPriceClient(client=_rest_client(_prices))
 
@@ -128,7 +128,7 @@ def _write_declining_ticks(path) -> None:
         writer.writeheader()
         rows = [
             ("1", "100"),
-            ("239_000_000_000", "99"),
+            ("179_000_000_000", "99"),
             ("299_000_000_000", "98"),
             ("300_000_000_000", "98"),
         ]
@@ -157,7 +157,7 @@ def test_replay_only_buys_down_when_down_qualifies_and_up_does_not(tmp_path) -> 
         # UP is overpriced relative to the Oracle's 0.05 prob_up (disqualified);
         # DOWN is underpriced relative to its 0.95 prob_down (qualifies).
         price = 0.90 if params["market"] == "up-token" else 0.30
-        return {"history": [{"t": 235, "p": price}]}
+        return {"history": [{"t": 175, "p": price}]}
 
     price_client = ClobHistoricalPriceClient(client=_rest_client(_prices))
 

@@ -1,4 +1,4 @@
-"""Calculate per-market UP/DOWN trade prices at T-60 from sorted JSONL trades."""
+"""Calculate per-market UP/DOWN prices at a configured cutoff (T-120 by default)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TextIO
 
-EXPECTED_OFFSET_SECONDS = 60.0
+EXPECTED_OFFSET_SECONDS = 120.0
 DEFAULT_PRICE_WINDOW_SECONDS = 15
 
 
@@ -81,7 +81,9 @@ def _optional_probability(value: str, *, field_name: str, market_id: str) -> flo
     return probability
 
 
-def _load_market_targets(backtest_path: Path) -> tuple[dict[str, MarketTarget], dict[str, object]]:
+def _load_market_targets(
+    backtest_path: Path, prediction_offset_s: float
+) -> tuple[dict[str, MarketTarget], dict[str, object]]:
     required = {
         "market_id",
         "slug",
@@ -123,8 +125,11 @@ def _load_market_targets(backtest_path: Path) -> tuple[dict[str, MarketTarget], 
                 market_id=market_id,
             )
             offset = (end - cutoff).total_seconds()
-            if not math.isclose(offset, EXPECTED_OFFSET_SECONDS, abs_tol=0.001):
-                raise ValueError(f"market {market_id} cutoff is T-{offset:g}s, expected T-60s")
+            if not math.isclose(offset, prediction_offset_s, abs_tol=0.001):
+                raise ValueError(
+                    f"market {market_id} cutoff is T-{offset:g}s, "
+                    f"expected T-{prediction_offset_s:g}s"
+                )
             target = MarketTarget(
                 market_id=market_id,
                 slug=slug,
@@ -207,13 +212,17 @@ def _market_result(
     target: MarketTarget,
     accumulator: MarketAccumulator,
     window_seconds: int,
+    prediction_offset_s: float,
 ) -> dict[str, object]:
     return {
         "market_id": target.market_id,
         "slug": target.slug,
         "cutoff_utc": target.cutoff_utc,
         "price_window_seconds": window_seconds,
-        "price_method": f"size-weighted VWAP of executions in (T-60s-{window_seconds}s, T-60s]",
+        "price_method": (
+            f"size-weighted VWAP of executions in "
+            f"(T-{prediction_offset_s:g}s-{window_seconds}s, T-{prediction_offset_s:g}s]"
+        ),
         "price_up": accumulator.up.vwap,
         "price_down": accumulator.down.vwap,
         "up_trade_count": accumulator.up.count,
@@ -234,15 +243,18 @@ def analyze_jsonl_market_prices(
     output_path: str | Path,
     *,
     window_seconds: int = DEFAULT_PRICE_WINDOW_SECONDS,
+    prediction_offset_s: float = EXPECTED_OFFSET_SECONDS,
 ) -> dict[str, object]:
     """Stream sorted trades once and produce UP/DOWN price estimates per market."""
 
     if window_seconds <= 0:
         raise ValueError("price window must be positive")
+    if not math.isfinite(prediction_offset_s) or not 0 < prediction_offset_s < 300:
+        raise ValueError("prediction offset must be positive and shorter than five minutes")
     trades_path = Path(trades_path)
     backtest_path = Path(backtest_path)
     output_path = Path(output_path)
-    targets_by_slug, backtest_summary = _load_market_targets(backtest_path)
+    targets_by_slug, backtest_summary = _load_market_targets(backtest_path, prediction_offset_s)
     targets = {target.market_id: target for target in targets_by_slug.values()}
     accumulators = {market_id: MarketAccumulator() for market_id in targets}
 
@@ -299,12 +311,14 @@ def analyze_jsonl_market_prices(
             relevant_trades += 1
 
     results = [
-        _market_result(target, accumulators[target.market_id], window_seconds)
+        _market_result(
+            target, accumulators[target.market_id], window_seconds, prediction_offset_s
+        )
         for target in sorted(targets.values(), key=lambda item: item.cutoff_seconds)
     ]
     report: dict[str, object] = {
         "price_window_seconds": window_seconds,
-        "cutoff_offset_seconds": EXPECTED_OFFSET_SECONDS,
+        "cutoff_offset_seconds": prediction_offset_s,
         "sort_order": (
             "descending Unix timestamps within each market; market groups may be unordered"
         ),
@@ -321,7 +335,8 @@ def analyze_jsonl_market_prices(
         },
         "interpretation": (
             "Prices are size-weighted VWAPs of executed trades in the configured window "
-            "ending at each market's T-60 cutoff. Null means no execution for that outcome "
+            f"ending at each market's T-{prediction_offset_s:g} cutoff. "
+            "Null means no execution for that outcome "
             "in the window. Execution prices do not establish an available bid/ask or depth."
         ),
         "markets": results,
@@ -333,7 +348,7 @@ def analyze_jsonl_market_prices(
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Calculate UP/DOWN trade prices at T-60 for every backtest market"
+        description="Calculate UP/DOWN trade prices at the configured backtest cutoff"
     )
     parser.add_argument(
         "--trades",
@@ -341,26 +356,37 @@ def _parser() -> argparse.ArgumentParser:
         default=Path("data/backtesting/polymarket_trades_window_10d.jsonl"),
     )
     parser.add_argument("--backtest", type=Path, default=Path("data/backtesting/backtest.csv"))
-    parser.add_argument(
-        "--output", type=Path, default=Path("data/backtesting/market_prices_t60.json")
-    )
+    parser.add_argument("--output", type=Path)
     parser.add_argument("--window-s", type=int, default=DEFAULT_PRICE_WINDOW_SECONDS)
+    parser.add_argument(
+        "--prediction-offset-s",
+        type=float,
+        default=EXPECTED_OFFSET_SECONDS,
+        help="backtest cutoff offset in seconds (default: 120)",
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
+    output_path = args.output or Path(
+        f"data/backtesting/market_prices_t{args.prediction_offset_s:g}.json"
+    )
     try:
         report = analyze_jsonl_market_prices(
-            args.trades, args.backtest, args.output, window_seconds=args.window_s
+            args.trades,
+            args.backtest,
+            output_path,
+            window_seconds=args.window_s,
+            prediction_offset_s=args.prediction_offset_s,
         )
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
     input_summary = report["input"]
     print(
         f"Wrote {len(report['markets'])} markets from {input_summary['lines_scanned']} "
-        f"streamed trades to {args.output}"
+        f"streamed trades to {output_path}"
     )
     return 0
 

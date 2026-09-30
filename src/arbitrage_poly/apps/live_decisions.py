@@ -30,7 +30,7 @@ from arbitrage_poly.price_collection.binance_ws import BinancePriceReader
 LOGGER = logging.getLogger(__name__)
 
 WINDOW_NS = DEFAULT_WINDOW_NS
-PREDICTION_OFFSET_NS = 60 * 1_000_000_000
+PREDICTION_OFFSET_NS = 120 * 1_000_000_000
 
 CSV_FIELDS = [
     "window_start_utc",
@@ -143,7 +143,7 @@ def _parser() -> argparse.ArgumentParser:
         )
     )
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--prediction-offset-s", type=float, default=60.0)
+    parser.add_argument("--prediction-offset-s", type=float, default=120.0)
     parser.add_argument("--volatility-model", choices=VOLATILITY_MODELS, default=HORIZON_EWMA)
     parser.add_argument("--verbose", action="store_true")
     return parser

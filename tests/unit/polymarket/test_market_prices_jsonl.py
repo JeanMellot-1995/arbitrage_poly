@@ -7,7 +7,7 @@ import pytest
 from arbitrage_poly.apps.market_prices_jsonl import analyze_jsonl_market_prices
 
 
-def _write_backtest(path, markets) -> None:
+def _write_backtest(path, markets, *, offset_seconds: int = 120) -> None:
     fields = (
         "market_id",
         "slug",
@@ -21,7 +21,7 @@ def _write_backtest(path, markets) -> None:
         writer.writeheader()
         for market_id, slug, end, prob_up, prob_down in markets:
             end_dt = datetime.fromtimestamp(end, UTC)
-            cutoff_dt = datetime.fromtimestamp(end - 60, UTC)
+            cutoff_dt = datetime.fromtimestamp(end - offset_seconds, UTC)
             writer.writerow(
                 {
                     "market_id": market_id,
@@ -61,8 +61,8 @@ def test_jsonl_prices_stream_sorted_trades_and_stop_after_latest_cutoff(tmp_path
     _write_backtest(
         backtest_path,
         [
-            ("market-1", "market-one", cutoff_one + 60, "0.4", "0.6"),
-            ("market-2", "aaa-market", cutoff_two + 60, "0.7", "0.3"),
+            ("market-1", "market-one", cutoff_one + 120, "0.4", "0.6"),
+            ("market-2", "aaa-market", cutoff_two + 120, "0.7", "0.3"),
         ],
     )
     _write_jsonl(
@@ -92,7 +92,26 @@ def test_jsonl_prices_stream_sorted_trades_and_stop_after_latest_cutoff(tmp_path
     assert second["price_down"] == pytest.approx(0.25)
     assert report["input"]["markets_past_price_window_boundary"] == 1
     assert report["input"]["lines_scanned"] == 8
+    assert report["cutoff_offset_seconds"] == 120
     assert json.loads(output_path.read_text())["markets"][0]["market_id"] == "market-1"
+
+def test_jsonl_prices_supports_a_matching_nondefault_offset(tmp_path) -> None:
+    backtest_path = tmp_path / "backtest.csv"
+    trades_path = tmp_path / "trades.jsonl"
+    output_path = tmp_path / "prices.json"
+    _write_backtest(
+        backtest_path,
+        [("market-1", "market-one", 1_800_000_000, "0.4", "0.6")],
+        offset_seconds=60,
+    )
+    _write_jsonl(trades_path, [])
+
+    report = analyze_jsonl_market_prices(
+        trades_path, backtest_path, output_path, prediction_offset_s=60
+    )
+
+    assert report["cutoff_offset_seconds"] == 60
+    assert report["markets"][0]["price_method"].endswith("T-60s]")
 
 
 def test_jsonl_prices_reject_unsorted_timestamps(tmp_path) -> None:
@@ -116,7 +135,7 @@ def test_jsonl_prices_reject_unsorted_timestamps(tmp_path) -> None:
         )
 
 
-def test_jsonl_prices_reject_backtest_not_at_t60(tmp_path) -> None:
+def test_jsonl_prices_reject_backtest_not_at_t120(tmp_path) -> None:
     backtest_path = tmp_path / "backtest.csv"
     trades_path = tmp_path / "trades.jsonl"
     _write_backtest(
@@ -125,10 +144,10 @@ def test_jsonl_prices_reject_backtest_not_at_t60(tmp_path) -> None:
     )
     _write_jsonl(trades_path, [])
     text = backtest_path.read_text(encoding="utf-8")
-    text = text.replace("2027-01-15T07:59:00Z", "2027-01-15T07:58:00Z")
+    text = text.replace("2027-01-15T07:58:00Z", "2027-01-15T07:59:00Z")
     backtest_path.write_text(text, encoding="utf-8")
 
-    with pytest.raises(ValueError, match="expected T-60s"):
+    with pytest.raises(ValueError, match="expected T-120s"):
         analyze_jsonl_market_prices(
             trades_path, backtest_path, tmp_path / "prices.json", window_seconds=15
         )
@@ -140,7 +159,7 @@ def test_jsonl_prices_skips_trade_fields_outside_price_window(tmp_path) -> None:
     cutoff = 1_799_999_940
     _write_backtest(
         backtest_path,
-        [("market-1", "market-one", cutoff + 60, "0.4", "0.6")],
+        [("market-1", "market-one", cutoff + 120, "0.4", "0.6")],
     )
     trades_path.write_text(
         "\n".join(

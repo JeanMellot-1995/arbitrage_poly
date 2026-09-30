@@ -10,7 +10,7 @@ from arbitrage_poly.polymarket.discovery import GammaMarketDiscovery
 from arbitrage_poly.polymarket.historical_prices import ClobHistoricalPriceClient
 from arbitrage_poly.polymarket.models import EconomicWindowPricing
 
-DEFAULT_PREDICTION_OFFSET_NS = 60 * 1_000_000_000
+DEFAULT_PREDICTION_OFFSET_NS = 120 * 1_000_000_000
 _STATUS_PRIORITY = ("api_error", "missing_price", "stale_price")
 
 

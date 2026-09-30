@@ -24,7 +24,7 @@ from arbitrage_poly.oracle.volatility import (
 )
 
 WINDOW_NS = DEFAULT_WINDOW_NS
-PREDICTION_OFFSET_NS = 60 * 1_000_000_000
+PREDICTION_OFFSET_NS = 120 * 1_000_000_000
 VOLATILITY_SAMPLING_INTERVAL_NS = 1_000_000_000
 AGG_TRADE_SOURCE = "binance.agg_trade"
 AGG_TRADE_MODEL = "terminal_lognormal_ewma_agg_trade"
@@ -618,7 +618,7 @@ def _parser() -> argparse.ArgumentParser:
         type=float,
         help="Only score markets from the last N days of the markets file (excludes --start)",
     )
-    parser.add_argument("--prediction-offset-s", type=float, default=60.0)
+    parser.add_argument("--prediction-offset-s", type=float, default=120.0)
     parser.add_argument("--probability-floor", type=float, default=PROBABILITY_FLOOR)
     parser.add_argument("--probability-ceiling", type=float, default=PROBABILITY_CEILING)
     parser.add_argument("--volatility-model", choices=VOLATILITY_MODELS, default=HORIZON_EWMA)

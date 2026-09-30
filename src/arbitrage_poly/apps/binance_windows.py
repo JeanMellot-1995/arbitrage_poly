@@ -236,7 +236,7 @@ def _summary(rows: list[dict[str, object]]) -> list[tuple[str, int, float, float
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--days", type=float, required=True)
-    parser.add_argument("--prediction-offset-s", type=float, default=60.0)
+    parser.add_argument("--prediction-offset-s", type=float, default=120.0)
     parser.add_argument("--symbol", default="BTCUSDT")
     parser.add_argument("--volatility-model", choices=VOLATILITY_MODELS, default=HORIZON_EWMA)
     parser.add_argument("--output", type=Path, required=True)

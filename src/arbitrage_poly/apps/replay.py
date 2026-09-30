@@ -25,7 +25,7 @@ from arbitrage_poly.pricing import SizingConfig, compute_sizing
 BOOK_TICKER_SOURCE = "binance.book_ticker"
 AGG_TRADE_SOURCE = "binance.agg_trade"
 AGG_TRADE_MODEL = "terminal_lognormal_ewma_agg_trade"
-PREDICTION_OFFSET_NS = 60 * 1_000_000_000
+PREDICTION_OFFSET_NS = 120 * 1_000_000_000
 DEFAULT_AGG_TRADE_SAMPLING_INTERVAL_NS = 1_000_000_000
 DEFAULT_PROBABILITY_FLOOR = 0.05
 DEFAULT_PROBABILITY_CEILING = 0.95
@@ -369,9 +369,10 @@ def _simulate_pnl(
     Without `polymarket_pricing`, `entry_price` is a synthetic constant used
     for sensitivity analysis, since Binance replay data has no historical
     Polymarket price. With `polymarket_pricing`, each window uses its own
-    UP/DOWN price at `T-60s`; a window with a non-`priced` status is excluded
-    from the bet (its Oracle score is unaffected) but still reported with its
-    `economic_status`. A side is only bought when its own Oracle probability
+    UP/DOWN price at the configured offset (`T-120s` by default); a window with
+    a non-`priced` status is excluded from the bet (its Oracle score is
+    unaffected) but still reported with its `economic_status`. A side is only
+    bought when its own Oracle probability
     is strictly above 0.5, its executable entry price falls outside
     `uncertain_price_band` (a token priced near a coin flip is treated as too
     uncertain to trade regardless of edge), and its edge over the executable
@@ -843,7 +844,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--polymarket-symbol",
-        help="enable live Polymarket pricing at T-60s for this symbol (e.g. BTCUSDT)",
+        help="enable live Polymarket pricing at T-120s for this symbol (e.g. BTCUSDT)",
     )
     parser.add_argument(
         "--polymarket-cache",
@@ -900,7 +901,7 @@ def main() -> None:
         default=PREDICTION_OFFSET_NS / 1_000_000_000,
         help=(
             "how many seconds before window end the Oracle prediction and"
-            " Polymarket price are taken (default: 60)"
+            " Polymarket price are taken (default: 120)"
         ),
     )
     args = parser.parse_args()

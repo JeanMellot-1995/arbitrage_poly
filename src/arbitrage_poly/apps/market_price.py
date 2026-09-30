@@ -1,4 +1,4 @@
-"""Estimate a Polymarket token price at the T-60 backtest cutoff from trades."""
+"""Estimate a Polymarket token price at a configured backtest cutoff (T-120 by default)."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from pathlib import Path
 
 DEFAULT_WINDOWS_SECONDS = (5, 15, 30, 60)
 DEFAULT_PRIMARY_WINDOW_SECONDS = 15
-EXPECTED_OFFSET_SECONDS = 60.0
+EXPECTED_OFFSET_SECONDS = 120.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,7 +54,9 @@ def _finite_float(value: str, *, field: str, row_number: int) -> float:
     return result
 
 
-def _load_backtest_row(backtest_path: Path, market_id: str) -> dict[str, str]:
+def _load_backtest_row(
+    backtest_path: Path, market_id: str, prediction_offset_s: float
+) -> dict[str, str]:
     required = {
         "market_id",
         "slug",
@@ -81,10 +83,10 @@ def _load_backtest_row(backtest_path: Path, market_id: str) -> dict[str, str]:
     end = _parse_datetime(row["end_date_utc"], field="end_date_utc")
     cutoff = _parse_datetime(row["prediction_cutoff_utc"], field="prediction_cutoff_utc")
     offset = (end - cutoff).total_seconds()
-    if not math.isclose(offset, EXPECTED_OFFSET_SECONDS, abs_tol=0.001):
+    if not math.isclose(offset, prediction_offset_s, abs_tol=0.001):
         raise ValueError(
-            f"market {market_id} cutoff is T-{offset:g}s, expected T-60s; "
-            "generate a backtest with --prediction-offset-s 60"
+            f"market {market_id} cutoff is T-{offset:g}s, "
+            f"expected T-{prediction_offset_s:g}s; generate a matching backtest"
         )
     return row
 
@@ -214,8 +216,9 @@ def analyze_market_price(
     *,
     windows_seconds: tuple[int, ...] = DEFAULT_WINDOWS_SECONDS,
     primary_window_seconds: int = DEFAULT_PRIMARY_WINDOW_SECONDS,
+    prediction_offset_s: float = EXPECTED_OFFSET_SECONDS,
 ) -> dict[str, object]:
-    """Estimate observed UP/DOWN prices at the T-60 cutoff from executions."""
+    """Estimate observed UP/DOWN prices at the configured cutoff from executions."""
 
     if not market_id.strip():
         raise ValueError("market_id cannot be empty")
@@ -223,11 +226,13 @@ def analyze_market_price(
         raise ValueError("all price windows must be positive")
     if primary_window_seconds not in windows_seconds:
         raise ValueError("primary window must be included in windows_seconds")
+    if not math.isfinite(prediction_offset_s) or not 0 < prediction_offset_s < 300:
+        raise ValueError("prediction offset must be positive and shorter than five minutes")
 
     backtest_path = Path(backtest_path)
     trades_path = Path(trades_path)
     output_path = Path(output_path)
-    backtest_row = _load_backtest_row(backtest_path, market_id)
+    backtest_row = _load_backtest_row(backtest_path, market_id, prediction_offset_s)
     cutoff_dt = _parse_datetime(
         backtest_row["prediction_cutoff_utc"], field="prediction_cutoff_utc"
     )
@@ -312,7 +317,7 @@ def analyze_market_price(
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Estimate Polymarket UP/DOWN trade prices at a market's T-60 cutoff"
+        description="Estimate Polymarket UP/DOWN trade prices at the configured cutoff"
     )
     parser.add_argument("--market-id", required=True)
     parser.add_argument("--trades", type=Path)
@@ -321,6 +326,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--output", type=Path)
     parser.add_argument("--primary-window-s", type=int, default=DEFAULT_PRIMARY_WINDOW_SECONDS)
+    parser.add_argument(
+        "--prediction-offset-s",
+        type=float,
+        default=EXPECTED_OFFSET_SECONDS,
+        help="backtest cutoff offset in seconds (default: 120)",
+    )
     return parser
 
 
@@ -329,7 +340,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     trades_path = args.trades or Path(f"data/backtesting/polymarket_trades_{args.market_id}.csv")
     output_path = args.output or Path(
-        f"data/backtesting/polymarket_price_{args.market_id}_t60.json"
+        f"data/backtesting/polymarket_price_{args.market_id}_t{args.prediction_offset_s:g}.json"
     )
     windows = tuple(sorted(set((*DEFAULT_WINDOWS_SECONDS, args.primary_window_s))))
     try:
@@ -340,6 +351,7 @@ def main(argv: list[str] | None = None) -> int:
             output_path,
             windows_seconds=windows,
             primary_window_seconds=args.primary_window_s,
+            prediction_offset_s=args.prediction_offset_s,
         )
     except (OSError, ValueError) as exc:
         parser.error(str(exc))

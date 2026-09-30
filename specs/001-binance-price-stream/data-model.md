@@ -148,7 +148,7 @@ Pour une fenêtre enrichie par l'API Polymarket, les champs suivants sont
 |---|---|
 | `market_id` | identifiant Polymarket découvert pour la fenêtre |
 | `up_token_id` / `down_token_id` | identifiants des deux issues binaires |
-| `up_price` / `down_price` | dernier prix historique retenu à `T-60s` ou avant |
+| `up_price` / `down_price` | dernier prix historique retenu à `T-120s` ou avant par défaut |
 | `up_price_ts_ns` / `down_price_ts_ns` | timestamps des prix retenus |
 | `up_price_age_ns` / `down_price_age_ns` | écart entre la décision et chaque prix |
 | `polymarket_price_source` | type de prix et endpoint/cache utilisé |

@@ -266,6 +266,11 @@ sur-apprentissage sur de petits échantillons.
 
 ## Décision 10 : prix Polymarket historiques à T-60s
 
+Note de mise à jour (2026-09-30) : `T-60s` décrit le cutoff étudié à
+l'origine. Le défaut actuel pour l'évaluation Oracle et la tarification
+économique est `T-120s`; les outils gardent l'offset configurable et la
+sélection des prix reste causale par rapport au cutoff choisi.
+
 - **Décision** : le replay économique doit récupérer séparément les prix des
   deux tokens binaires Polymarket à l'échéance de décision
   `decision_ts = window_end - 60s`. Gamma sert à découvrir le marché et ses

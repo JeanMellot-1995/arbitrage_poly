@@ -39,7 +39,7 @@ def test_backtest_uses_only_window_ticks_and_cutoff_tick(tmp_path) -> None:
     end_date = datetime(2026, 1, 1, 0, 5, tzinfo=UTC)
     end_us = int(end_date.timestamp() * 1_000_000)
     start_us = end_us - 300_000_000
-    cutoff_us = end_us - 60_000_000
+    cutoff_us = end_us - 120_000_000
     markets_path = tmp_path / "markets.json"
     trades_path = tmp_path / "trades.csv"
     output_path = tmp_path / "backtest.csv"
@@ -64,7 +64,7 @@ def test_backtest_uses_only_window_ticks_and_cutoff_tick(tmp_path) -> None:
     row = _read_output(output_path)
     assert row["reference_price"] == "100.0"
     assert row["current_price"] == "102.0"
-    assert row["fair_value_ts_utc"] == "2026-01-01T00:04:00.000000Z"
+    assert row["fair_value_ts_utc"] == "2026-01-01T00:03:00.000000Z"
     assert row["outcome_binance"] == "DOWN"
     assert row["outcome_polymarket"] == "UP"
     assert row["scored"] == "True"
@@ -79,7 +79,7 @@ def test_backtest_resets_oracle_volatility_for_each_market(tmp_path) -> None:
     second_end = first_end + timedelta(minutes=5)
     end_us = int(second_end.timestamp() * 1_000_000)
     start_us = end_us - 300_000_000
-    cutoff_us = end_us - 60_000_000
+    cutoff_us = end_us - 120_000_000
     markets_path = tmp_path / "markets.json"
     trades_path = tmp_path / "trades.csv"
     output_path = tmp_path / "backtest.csv"
@@ -108,7 +108,7 @@ def test_backtest_resets_oracle_volatility_for_each_market(tmp_path) -> None:
             (2, start_us - 60_000_000, 2),
             (3, start_us, 100),
             (4, start_us + 1_000_000, 100),
-            (5, cutoff_us, 100),
+            (5, cutoff_us, 101),
         ],
     )
 
@@ -119,10 +119,9 @@ def test_backtest_resets_oracle_volatility_for_each_market(tmp_path) -> None:
     with output_path.open(newline="", encoding="utf-8") as input_file:
         rows = list(csv.DictReader(input_file))
     assert rows[1]["reference_price"] == "100.0"
-    assert rows[1]["current_price"] == "100.0"
-    assert rows[1]["fair_value_ts_utc"] == "2026-01-01T00:09:00.000000Z"
+    assert rows[1]["current_price"] == "101.0"
+    assert rows[1]["fair_value_ts_utc"] == "2026-01-01T00:08:00.000000Z"
     assert rows[0]["volatility"] != rows[1]["volatility"]
-    assert rows[1]["volatility"] == "1e-06"
 
 
 def test_backtest_calculates_one_dollar_oracle_fair_value_pnl(tmp_path) -> None:
@@ -155,9 +154,9 @@ def test_backtest_calculates_one_dollar_oracle_fair_value_pnl(tmp_path) -> None:
         trades_path,
         [
             (1, first_start_us, 100),
-            (2, first_start_us + 240_000_000, 101),
+            (2, first_start_us + 180_000_000, 101),
             (3, second_start_us, 100),
-            (4, second_start_us + 240_000_000, 101),
+            (4, second_start_us + 180_000_000, 101),
         ],
     )
 

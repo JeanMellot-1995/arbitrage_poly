@@ -81,7 +81,7 @@ class TokenPriceLookup:
 
 @dataclass(frozen=True, slots=True)
 class EconomicWindowPricing:
-    """Polymarket UP/DOWN prices resolved for one Oracle window at T-60s.
+    """Polymarket UP/DOWN prices resolved for one Oracle window at T-120s by default.
 
     A non-`priced` status means the window must be excluded from edge, sizing
     and P/L simulation; it does not affect the Oracle's own FairValue score.

@@ -89,7 +89,7 @@ src/
   ├── polymarket/
   │  ├── discovery.py        # découverte Gamma API
   │  ├── historical_prices.py # historique CLOB
-  │  ├── economic_pricing.py # tarification à T-60s
+  │  ├── economic_pricing.py # tarification à T-120s par défaut
   │  ├── models.py            # contrats Polymarket
   │  ├── cache.py             # cache JSON hors réseau
   │  └── rest.py              # GET, rate limiter et retries bornés
@@ -156,8 +156,8 @@ abstraction supplémentaire lorsque les deux répondent au même contrat.
 
 9. Étendre le backtest à plusieurs journées UTC. Produire les scores par jour,
    les intervalles de confiance ou une estimation de leur variabilité, et une
-   agrégation globale. Tester au minimum les horizons de prédiction `T-120s`,
-   `T-60s` et `T-30s` sans réutiliser les données de calibration dans le score.
+   agrégation globale. Tester au minimum    les horizons de prédiction `T-120s` (défaut), `T-60s` et `T-30s` sans
+   réutiliser les données de calibration dans le score.
 
 10. Ne comparer la FairValue aux marchés Polymarket qu'après validation
     probabiliste hors échantillon. Cette étape doit intégrer bid/ask, frais,
@@ -171,10 +171,11 @@ abstraction supplémentaire lorsque les deux répondent au même contrat.
   bankroll, la mise maximale par marché, la profondeur et les kill switches.
   Conserver une mise fixe comme baseline de comparaison.
 
-12. Enrichir le replay avec les prix historiques Polymarket à `T-60s`. Le
+12. Enrichir le replay avec les prix historiques Polymarket au même cutoff que
+    l'Oracle (`T-120s` par défaut). Le
     workflow doit découvrir le marché correspondant à la fenêtre via Gamma,
     résoudre les tokens `UP` et `DOWN`, puis demander à l'API CLOB l'historique
-    de prix de chaque token autour de `window_end - 60s`. Le prix retenu doit
+    de prix de chaque token autour de `window_end - offset`. Le prix retenu doit
     être le dernier prix observable à cette échéance ou avant, avec son
     timestamp et sa source. L'absence de marché, de token ou de prix
     suffisamment proche exclut uniquement la simulation économique de la
@@ -321,7 +322,7 @@ Le contrat doit conserver séparément `gross_edge`, `fees`, `slippage_penalty`,
 prix exécutable, `Q`, le nombre de parts, le paiement gagnant théorique, `A`,
 la quantité évaluée et la cause éventuelle du rejet. Pour le replay économique,
 il doit aussi conserver `market_id`, les token IDs `UP` et `DOWN`, les prix
-Polymarket à `T-60s`, leurs timestamps, la latence par rapport à l'échéance et
+Polymarket à `T-120s` par défaut, leurs timestamps, la latence par rapport à l'échéance et
 le motif d'absence éventuel. Aucun
 arrondi intermédiaire ne doit modifier la comparaison au seuil.
 
@@ -368,7 +369,7 @@ Les motifs de rejet doivent être stables et exploitables, au minimum :
   frais et un slippage qui annulent l'edge, l'arrondi au tick size et les
   modes passif/agressif.
 6. Ajouter un test d'intégration hors réseau avec réponses Gamma/CLOB
-  enregistrées : sélection du dernier prix `<= T-60s`, séparation UP/DOWN,
+  enregistrées : sélection du dernier prix `<= T-120s` par défaut, séparation UP/DOWN,
   marché absent, token absent, prix absent et réponse périmée.
 7. Vérifier que le module pricing n'importe aucun client d'exécution, ne fait
    aucune écriture réseau et reste déterministe pour les mêmes contrats et
@@ -393,8 +394,9 @@ Les motifs de rejet doivent être stables et exploitables, au minimum :
   constant indépendant du mode d'exécution ne doit pas être utilisé.
 - Un snapshot au-delà de la fraîcheur maximale est rejeté sans calculer une
   opportunité acceptée.
-- Un prix Polymarket historique postérieur à `T-60s` ne doit jamais être
-  utilisé pour une fenêtre ; le prix retenu est le dernier prix `<= T-60s`.
+- Un prix Polymarket historique postérieur au cutoff configuré ne doit jamais
+  être utilisé pour une fenêtre ; le prix retenu est le dernier prix antérieur
+  ou égal au cutoff (`T-120s` par défaut).
 - L'absence d'un marché, d'un token ou d'un prix Polymarket est tracée et
   exclut la simulation P/L de la fenêtre sans exclure le scoring Oracle.
 - Une probabilité `FairValue` invalide ou qui ne respecte pas le complément

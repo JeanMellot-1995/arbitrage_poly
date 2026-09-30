@@ -64,7 +64,7 @@ def test_replay_classifies_windows_and_reports_invalid_rows(tmp_path) -> None:
     assert report.partial_windows == 1
     # With a tiny window_ns=10, prediction_offset_ns must be smaller than the
     # window itself; here it lands on the tick at ts=19, so the one complete
-    # window is scored (unlike the module default of 60s, which would exceed
+    # window is scored (unlike the module default of 120s, which would exceed
     # window_ns and never select a prediction).
     assert report.scored_windows == 1
     assert report.brier_score is not None
@@ -105,26 +105,27 @@ def test_replay_reads_native_aggtrades_format(tmp_path) -> None:
     assert report.probability_ceiling == 0.95
 
 
-def test_replay_scores_one_prediction_at_t_minus_60_seconds(tmp_path) -> None:
+def test_replay_scores_one_prediction_at_t_minus_120_seconds_by_default(tmp_path) -> None:
     input_path = tmp_path / "ticks.csv"
     output_path = tmp_path / "fair_values.csv"
     with input_path.open("w", newline="", encoding="utf-8") as input_file:
         writer = csv.DictWriter(input_file, fieldnames=FIELDS)
         writer.writeheader()
         write_row(writer, "1", "100", "binance.book_ticker")
-        write_row(writer, "59_000_000_000", "101", "binance.book_ticker")
-        write_row(writer, "119_000_000_000", "102", "binance.book_ticker")
-        write_row(writer, "120_000_000_000", "102", "binance.book_ticker")
+        write_row(writer, "179_000_000_000", "101", "binance.book_ticker")
+        write_row(writer, "180_000_000_000", "101", "binance.book_ticker")
+        write_row(writer, "299_000_000_000", "102", "binance.book_ticker")
+        write_row(writer, "300_000_000_000", "102", "binance.book_ticker")
 
     report = run_replay(
         input_path,
         output_path,
-        window_ns=120_000_000_000,
+        window_ns=300_000_000_000,
     )
 
     assert report.complete_windows == 1
     assert report.scored_windows == 1
-    assert report.prediction_offset_ns == 60_000_000_000
+    assert report.prediction_offset_ns == 120_000_000_000
 
 
 def test_replay_reports_fixed_stake_pnl(tmp_path) -> None:
@@ -142,6 +143,7 @@ def test_replay_reports_fixed_stake_pnl(tmp_path) -> None:
         input_path,
         output_path,
         window_ns=120_000_000_000,
+        prediction_offset_ns=60_000_000_000,
         entry_price=0.4,
         stake_usd=10.0,
     )
@@ -176,6 +178,7 @@ def test_replay_skips_bet_when_fair_value_does_not_exceed_entry_price(tmp_path) 
         input_path,
         output_path,
         window_ns=120_000_000_000,
+        prediction_offset_ns=60_000_000_000,
         entry_price=0.99,
         stake_usd=10.0,
     )
@@ -196,7 +199,7 @@ def test_replay_dynamic_sizing_uses_kelly_stake_and_exports_kelly_fraction(tmp_p
         write_row(writer, "120_000_000_000", "102", "binance.book_ticker")
 
     sizing_config = SizingConfig(mode="dynamic", bankroll=10.0, kelly_fraction_cap=0.5)
-    # This window's prob_up at T-60s is 0.95 (verified separately); the entry
+    # This window's prob_up at T-120s is 0.95 (verified separately); the entry
     # price is the synthetic constant below.
     expected = compute_sizing(accepted=True, config=sizing_config, probability=0.95, price=0.4)
     assert expected.stake_usd > 0.0
@@ -205,6 +208,7 @@ def test_replay_dynamic_sizing_uses_kelly_stake_and_exports_kelly_fraction(tmp_p
         input_path,
         output_path,
         window_ns=120_000_000_000,
+        prediction_offset_ns=60_000_000_000,
         entry_price=0.4,
         sizing_config=sizing_config,
         fee_rate=0.0,
@@ -234,6 +238,7 @@ def test_replay_dynamic_sizing_rejects_stake_and_sizing_config_together(tmp_path
             input_path,
             output_path,
             window_ns=120_000_000_000,
+            prediction_offset_ns=60_000_000_000,
             entry_price=0.4,
             stake_usd=10.0,
             sizing_config=sizing_config,
@@ -255,6 +260,7 @@ def test_replay_applies_fees_to_pnl_of_an_accepted_bet(tmp_path) -> None:
         input_path,
         output_path,
         window_ns=120_000_000_000,
+        prediction_offset_ns=60_000_000_000,
         entry_price=0.4,
         stake_usd=10.0,
         fee_rate=0.1,

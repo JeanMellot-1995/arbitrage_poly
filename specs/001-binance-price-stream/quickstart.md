@@ -72,8 +72,11 @@ curl -L \
 
 Le replay historique doit traiter les timestamps d'exécution Binance, produire
 288 fenêtres UTC et étiqueter le rapport avec la source `agg_trade`.
-Les métriques sont calculées avec une seule prédiction par fenêtre, sélectionnée
-à `T-60s` ou à la dernière observation disponible avant cette échéance.
+Les métriques Oracle sont calculées par défaut avec une seule prédiction par
+fenêtre, sélectionnée à `T-120s` ou à la dernière observation disponible avant
+cette échéance. Le paramètre `--prediction-offset-s` permet d'évaluer d'autres
+horizons ; conserver le même offset lors de la comparaison des prédictions et
+des prix Polymarket.
 
 Pour le mode live `bookTicker`, après avoir collecté au moins une fenêtre
 complète, lancer le replay hors réseau :
@@ -107,7 +110,8 @@ partielles ; les métriques restent étiquetées par source.
 ## Replay avec prix Polymarket historiques
 
 Le module `arbitrage_poly.polymarket` fournit la découverte Gamma, la lecture
-historique CLOB et l'orchestration à `T-60s` :
+historique CLOB et l'orchestration au même offset que l'Oracle (`T-120s` par
+défaut) :
 
 ```python
 from arbitrage_poly.polymarket import (
@@ -136,7 +140,8 @@ doit exclure la fenêtre du P/L, de l'edge et du sizing, sans modifier le score
 Oracle de cette fenêtre.
 
 Cette intégration est câblée dans `apps/replay.py` : fournir
-`--polymarket-symbol` active la tarification par fenêtre à `T-60s` à la place
+`--polymarket-symbol` active la tarification par fenêtre au même cutoff que la
+prédiction Oracle (`T-120s` par défaut) à la place
 d'un `--entry-price` constant (les deux options sont mutuellement exclusives).
 `--polymarket-cache` pointe vers un fichier JSON de réponses Gamma/CLOB
 enregistrées, pour un replay déterministe hors réseau ; sans
@@ -162,9 +167,13 @@ CSV ajoute `economic_status`, `market_id`, `up_token_id`/`down_token_id`,
 
 Le mode économique doit recevoir une configuration d'accès aux endpoints
 Polymarket et un cache local des réponses Gamma/CLOB pour permettre un replay
-déterministe hors réseau. Pour chaque fenêtre, il vise `window_end - 60s`,
+déterministe hors réseau. Pour chaque fenêtre, il vise `window_end - offset`;
+par défaut, `offset` vaut 120 secondes,
 sélectionne le dernier prix `UP` et `DOWN` antérieur ou égal à cette échéance,
 puis exporte leur âge et leur statut.
+Les commandes `arbitrage-poly-market-price` et `arbitrage-poly-market-prices`
+acceptent également `--prediction-offset-s` (défaut : 120) ; fournir le même
+offset que celui utilisé pour produire le backtest.
 
 Une fenêtre sans prix Polymarket exploitable reste comptée dans les métriques
 Oracle, mais elle est exclue du P/L et de l'edge. Les réponses API doivent être

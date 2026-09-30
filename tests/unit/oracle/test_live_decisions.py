@@ -9,7 +9,7 @@ from arbitrage_poly.models import Tick
 from arbitrage_poly.oracle.oracle import PriceOracle
 from arbitrage_poly.price_collection.binance_ws import BinancePriceReader
 
-OFFSET_NS = 60_000_000_000
+OFFSET_NS = 120_000_000_000
 WINDOW_START_NS = 300_000_000_000
 
 
@@ -44,10 +44,10 @@ def test_records_one_decision_per_window_at_offset() -> None:
         await queue.put(
             Tick(ts_ns=WINDOW_START_NS, price=100.0, qty=1.0, source=AGG_TRADE_SOURCE, seq=1)
         )
-        # Inside the t-60s window: this is the frozen decision.
+        # At the T-120s cutoff: this is the frozen decision.
         await queue.put(
             Tick(
-                ts_ns=WINDOW_START_NS + 250_000_000_000,
+                ts_ns=WINDOW_START_NS + 180_000_000_000,
                 price=101.0,
                 qty=1.0,
                 source=AGG_TRADE_SOURCE,
@@ -71,7 +71,7 @@ def test_records_one_decision_per_window_at_offset() -> None:
         assert row["side"] == "UP"
         assert row["reference_price"] == 100.0
         assert row["current_price"] == 101.0
-        assert row["prediction_cutoff_utc"] == "1970-01-01T00:09:00.000000Z"
+        assert row["prediction_cutoff_utc"] == "1970-01-01T00:08:00.000000Z"
 
     asyncio.run(scenario())
 
@@ -91,7 +91,7 @@ def test_second_tick_in_same_window_does_not_duplicate_decision() -> None:
         )
         await queue.put(
             Tick(
-                ts_ns=WINDOW_START_NS + 250_000_000_000,
+                ts_ns=WINDOW_START_NS + 180_000_000_000,
                 price=101.0,
                 qty=1.0,
                 source=AGG_TRADE_SOURCE,
@@ -101,7 +101,7 @@ def test_second_tick_in_same_window_does_not_duplicate_decision() -> None:
         # Second tick still inside the same window, past the offset: no new decision.
         await queue.put(
             Tick(
-                ts_ns=WINDOW_START_NS + 260_000_000_000,
+                ts_ns=WINDOW_START_NS + 190_000_000_000,
                 price=102.0,
                 qty=1.0,
                 source=AGG_TRADE_SOURCE,
@@ -111,7 +111,7 @@ def test_second_tick_in_same_window_does_not_duplicate_decision() -> None:
         # Next window's tick past its own offset: this is the second, distinct decision.
         await queue.put(
             Tick(
-                ts_ns=WINDOW_START_NS + WINDOW_NS + 250_000_000_000,
+                ts_ns=WINDOW_START_NS + WINDOW_NS + 180_000_000_000,
                 price=103.0,
                 qty=1.0,
                 source=AGG_TRADE_SOURCE,
@@ -151,7 +151,7 @@ def test_resume_skips_window_already_decided() -> None:
         )
         await queue.put(
             Tick(
-                ts_ns=WINDOW_START_NS + 250_000_000_000,
+                ts_ns=WINDOW_START_NS + 180_000_000_000,
                 price=101.0,
                 qty=1.0,
                 source=AGG_TRADE_SOURCE,
@@ -161,7 +161,7 @@ def test_resume_skips_window_already_decided() -> None:
         # A tick from the next window should still produce a fresh decision.
         await queue.put(
             Tick(
-                ts_ns=WINDOW_START_NS + WINDOW_NS + 250_000_000_000,
+                ts_ns=WINDOW_START_NS + WINDOW_NS + 180_000_000_000,
                 price=103.0,
                 qty=1.0,
                 source=AGG_TRADE_SOURCE,

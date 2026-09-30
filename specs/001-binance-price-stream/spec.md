@@ -128,7 +128,7 @@ accepté ainsi que l'issue terminale de chaque fenêtre.
   probabilités, issues et métriques.
 6. **Étant donné** une fenêtre complète, **quand** le replay calcule ses
   métriques, **alors** il retient une seule `FairValue`, choisie comme la
-  dernière observation disponible à `T-60s` ou avant, et n'utilise aucune
+  dernière observation disponible à `T-120s` ou avant par défaut, et n'utilise aucune
   observation postérieure pour le scoring.
 
 ### Spécification détaillée du backtest
@@ -173,12 +173,12 @@ l'Oracle et la fiabilité de ses probabilités.
 - L'Oracle DOIT produire des `FairValue` au fil des trades acceptés et
   conserver le modèle, la volatilité, le prix courant et le temps restant.
 - La métrique de référence utilise une seule prédiction par fenêtre.
-- Pour la configuration v1, cette prédiction est la dernière `FairValue` dont
-  le timestamp est inférieur ou égal à `T+240s`, soit `T-60s` avant la fin.
-- Une observation postérieure à `T+240s` NE DOIT PAS influencer cette
+- Pour la configuration actuelle, cette prédiction est la dernière `FairValue`
+  dont le timestamp est inférieur ou égal à `T+180s`, soit `T-120s` avant la fin.
+- Une observation postérieure à `T+180s` NE DOIT PAS influencer cette
   prédiction ni ses métriques.
-- Le replay DOIT permettre de tester d'autres offsets, au minimum `T-120s`,
-  `T-60s` et `T-30s`, en les rapportant séparément.
+- Le replay DOIT permettre de tester d'autres offsets, au minimum `T-120s`
+  (valeur par défaut), `T-60s` et `T-30s`, en les rapportant séparément.
 - Une fenêtre complète sans `FairValue` disponible avant l'offset est
   `excluded` du scoring et son motif est comptabilisé.
 
@@ -246,12 +246,13 @@ les prix bid/ask exécutables, la profondeur, les frais, le slippage, la
 latence, la probabilité de fill et un seuil minimal d'edge. Une amélioration du
 Brier score ou de la calibration ne constitue pas une preuve de rentabilité.
 
-#### Prix Polymarket historiques à T-60s
+#### Prix Polymarket historiques à T-120s par défaut
 
 Pour chaque fenêtre complète, le replay DOIT pouvoir découvrir le marché
 Polymarket correspondant, identifier ses tokens `UP` et `DOWN`, puis récupérer
-leurs prix historiques auprès de l'API Polymarket. La cible temporelle est
-`decision_ts = window_end - 60s`.
+leurs prix historiques auprès de l'API Polymarket. Par défaut, la cible
+temporelle est `decision_ts = window_end - 120s`; elle doit suivre l'offset
+configuré pour la prédiction Oracle.
 
 Le prix retenu pour chaque token DOIT être le dernier prix dont le timestamp
 est inférieur ou égal à `decision_ts`. Un prix reçu après cette échéance NE
@@ -393,8 +394,9 @@ appliqués afin que le passage au sizing dynamique soit mesurable.
   utilisée (`agg_trade` historique ou `book_ticker` live) et NE DOIT PAS mélanger
   silencieusement leurs observations dans une même évaluation.
 - **FR-025** : Le replay DOIT calculer les métriques de calibration avec au plus
-  une prédiction par fenêtre complète. La prédiction de référence DOIT être la
-  dernière `FairValue` dont le timestamp est inférieur ou égal à `fin - 60s`.
+  une prédiction par fenêtre complète. Par défaut, la prédiction de référence
+  DOIT être la dernière `FairValue` dont le timestamp est inférieur ou égal à
+  `fin - 120s`.
   Une fenêtre complète sans observation avant cette échéance est exclue du
   scoring et comptabilisée séparément.
 - **FR-026** : L'estimation de volatilité utilisée par le mode historique
@@ -461,7 +463,7 @@ appliqués afin que le passage au sizing dynamique soit mesurable.
   configurée.
 - **FR-041** : Le replay DOIT pouvoir récupérer l'historique de prix des deux
   tokens via l'API Polymarket et sélectionner, pour chacun, le dernier point
-  dont `timestamp <= window_end - 60s`.
+  dont `timestamp <= window_end - prediction_offset` (120s par défaut).
 - **FR-042** : Le replay DOIT rejeter les points postérieurs à l'échéance et
   appliquer une fraîcheur maximale configurable aux points antérieurs. Il DOIT
   conserver la source, le timestamp et l'écart à l'échéance.
@@ -510,7 +512,7 @@ appliqués afin que le passage au sizing dynamique soit mesurable.
   mode de sizing et les plafonds appliqués. Cette évaluation ne constitue pas
   un ordre.
 - **Prix Polymarket historique** : association d'une fenêtre à un marché,
-  aux tokens `UP` et `DOWN`, aux prix retenus à `T-60s`, à leurs timestamps, à
+  aux tokens `UP` et `DOWN`, aux prix retenus à `T-120s` par défaut, à leurs timestamps, à
   leur fraîcheur et à un motif d'absence éventuel. Cette entité ne constitue
   pas un snapshot complet du carnet.
 - **Rapport de replay** : agrégats déterministes du replay comprenant les
@@ -567,7 +569,7 @@ appliqués afin que le passage au sizing dynamique soit mesurable.
 - **SC-017** : Le rapport indique explicitement que ses métriques Oracle ne
   contiennent ni frais, ni slippage, ni exécution, ni rentabilité Polymarket.
 - **SC-018** : Sur un jeu de réponses Gamma/CLOB enregistrées contenant des
-  prix antérieurs et postérieurs à `T-60s`, le replay ne retient jamais un prix
+  prix antérieurs et postérieurs à `T-120s`, le replay ne retient jamais un prix
   postérieur, expose `oracle_scored_windows` et `economic_priced_windows`
   séparément, et exclut du P/L toute fenêtre sans prix Polymarket valide sans
   retirer sa `FairValue` du score Oracle.
