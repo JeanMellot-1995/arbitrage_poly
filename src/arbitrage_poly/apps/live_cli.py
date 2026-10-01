@@ -1,4 +1,4 @@
-"""Command-line entry point for the read-only live paper loop."""
+"""Command-line entry point for the live paper/execution loop."""
 
 from __future__ import annotations
 
@@ -6,10 +6,12 @@ import argparse
 import asyncio
 import json
 import logging
+from pathlib import Path
 
 from arbitrage_poly.apps.live import LiveDecision, run_live
 from arbitrage_poly.oracle.oracle import PriceOracle
 from arbitrage_poly.polymarket.discovery import GammaMarketDiscovery
+from arbitrage_poly.polymarket.execution import PolymarketExecutor
 from arbitrage_poly.polymarket.live_book import PolymarketLiveBook
 from arbitrage_poly.polymarket.rest import RateLimitedRestClient
 from arbitrage_poly.price_collection.binance_ws import BinancePriceReader
@@ -19,7 +21,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run the read-only Polymarket paper loop")
+    parser = argparse.ArgumentParser(description="Run the Polymarket paper/execution loop")
     parser.add_argument("--quantity", type=float, default=1.0)
     parser.add_argument("--min-net-edge", type=float, default=0.01)
     parser.add_argument("--slippage-buffer", type=float, default=0.0)
@@ -29,6 +31,30 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--refresh-interval-s", type=float, default=1.0)
     parser.add_argument("--request-interval-s", type=float, default=0.2)
     parser.add_argument("--max-retries", type=int, default=2)
+    parser.add_argument(
+        "--prediction-offset-s",
+        type=float,
+        default=120.0,
+        help=(
+            "Freeze at most one decision per window, taken this many seconds before it "
+            "closes (default T-120s, 0 disables; same convention as "
+            "arbitrage-poly-live-decisions)."
+        ),
+    )
+    parser.add_argument(
+        "--enable-live-trading",
+        action="store_true",
+        help=(
+            "DANGER: place real orders on Polymarket for accepted opportunities. "
+            "Off by default (paper mode)."
+        ),
+    )
+    parser.add_argument(
+        "--creds-file",
+        type=Path,
+        default=Path("creds.json"),
+        help="API credentials file, only used with --enable-live-trading (default: ./creds.json)",
+    )
     parser.add_argument("--verbose", action="store_true")
     return parser
 
@@ -60,6 +86,10 @@ async def _run(args: argparse.Namespace) -> None:
         client=client,
         refresh_interval_s=args.refresh_interval_s,
     )
+    executor = None
+    if args.enable_live_trading:
+        LOGGER.warning("live_trading_enabled", extra={"creds_file": str(args.creds_file)})
+        executor = PolymarketExecutor(api_file_path=args.creds_file)
     await run_live(
         reader=reader,
         oracle=PriceOracle(),
@@ -78,6 +108,8 @@ async def _run(args: argparse.Namespace) -> None:
         ),
         quantity=args.quantity,
         on_decision=_log_decision,
+        executor=executor,
+        offset_ns=int(args.prediction_offset_s * 1_000_000_000),
     )
 
 

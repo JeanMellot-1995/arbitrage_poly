@@ -53,6 +53,11 @@ class PolymarketLiveBook:
         self._snapshot_by_window: dict[int, OrderBookSnapshot] = {}
         self._snapshot_at: dict[int, float] = {}
 
+    @property
+    def market_by_window(self) -> dict[int, tuple[str, str]]:
+        """UP/DOWN token ids discovered so far, keyed by window start."""
+        return self._market_by_window
+
     def snapshot(
         self, fair_value: FairValue, *, symbol: str = "BTCUSDT"
     ) -> OrderBookSnapshot | None:

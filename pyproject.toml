@@ -20,12 +20,18 @@ arbitrage-poly-market-price = "arbitrage_poly.apps.market_price:main"
 arbitrage-poly-market-prices = "arbitrage_poly.apps.market_prices_jsonl:main"
 arbitrage-poly-live = "arbitrage_poly.apps.live_cli:main"
 arbitrage-poly-live-decisions = "arbitrage_poly.apps.live_decisions:main"
+arbitrage-poly-execute-order = "arbitrage_poly.apps.execute_order:main"
+arbitrage-poly-market-order = "arbitrage_poly.apps.market_order:main"
+arbitrage-poly-oracle-trade = "arbitrage_poly.apps.oracle_trade:main"
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8,<9",
     "pytest-asyncio>=0.23,<1",
     "ruff>=0.6,<1",
+]
+live-trading = [
+    "py_clob_client_v2",
 ]
 
 [tool.setuptools.packages.find]

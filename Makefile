@@ -25,6 +25,17 @@ MAKE_TOOLS := $(HOST_PYTHON) scripts/make_tools.py
 LIVE_OUTPUT ?= $(OUT_DIR)/live-decisions.csv
 LIVE_OFFSET_S ?= 120
 
+# Live Oracle trader (Binance -> Oracle at T-LIVE_OFFSET_S -> Polymarket order).
+TRADE_OUTPUT ?= $(OUT_DIR)/oracle-trades.csv
+STAKE_USD ?= 5
+CREDS_FILE ?= creds.json
+CONFIRM ?= 0
+
+# Historical input data (Polymarket markets JSON + Binance aggTrades CSV).
+DATA_DIR ?= src/arbitrage_poly/data
+MARKETS ?= $(DATA_DIR)/polymarket-btc-5m-last-10d.json
+BINANCE_AGGTRADES ?= $(DATA_DIR)/BTCUSDT-aggTrades-concat.csv
+
 # Historical backtest / calibration.
 BACKTEST_OUTPUT ?= $(OUT_DIR)/backtest.csv
 BACKTEST_REPORT ?= $(OUT_DIR)/backtest.json
@@ -39,7 +50,7 @@ ORACLE_OFFSET_S ?= $(BACKTEST_OFFSET_S)
 ORACLE_PREFIX ?= $(OUT_DIR)/oracle-last-$(DAYS)d-t$(ORACLE_OFFSET_S)
 
 .PHONY: help venv install test lint format format-check check \
-	live live-decisions backtest calibration oracle-results binance-windows clean
+	live live-decisions oracle-trade aggtrades backtest calibration oracle-results binance-windows clean
 
 help: ## List available targets
 	@$(MAKE_TOOLS) help $(firstword $(MAKEFILE_LIST))
@@ -74,7 +85,17 @@ LIVE_ARGS = --min-net-edge 0.01 \
 LIVE_DECISIONS_ARGS = --output $(LIVE_OUTPUT) \
 	--prediction-offset-s $(LIVE_OFFSET_S)
 
-BACKTEST_ARGS = --prediction-offset-s $(BACKTEST_OFFSET_S) \
+ORACLE_TRADE_ARGS = --output $(TRADE_OUTPUT) \
+	--prediction-offset-s $(LIVE_OFFSET_S) \
+	--stake-usd $(STAKE_USD) \
+	--creds-file $(CREDS_FILE) \
+	$(if $(filter 1,$(CONFIRM)),--yes,)
+
+DATA_ARGS = --markets $(MARKETS) \
+	--trades $(BINANCE_AGGTRADES)
+
+BACKTEST_ARGS = $(DATA_ARGS) \
+	--prediction-offset-s $(BACKTEST_OFFSET_S) \
 	--output $(BACKTEST_OUTPUT) \
 	--report $(BACKTEST_REPORT)
 
@@ -83,7 +104,8 @@ CALIBRATION_ARGS = --input $(BACKTEST_OUTPUT) \
 	--daily-output $(CALIBRATION_DAILY) \
 	--report $(CALIBRATION_REPORT)
 
-ORACLE_BACKTEST_ARGS = --last-days $(DAYS) \
+ORACLE_BACKTEST_ARGS = $(DATA_ARGS) \
+	--last-days $(DAYS) \
 	--prediction-offset-s $(ORACLE_OFFSET_S) \
 	--output $(ORACLE_PREFIX).csv \
 	--report $(ORACLE_PREFIX).json
@@ -103,13 +125,21 @@ live: ## Run the full read-only paper loop (Binance + Polymarket book required)
 live-decisions: ## Record Oracle UP/DOWN decisions at T-LIVE_OFFSET_S (default T-120s) from live Binance data only
 	$(BIN)arbitrage-poly-live-decisions$(EXE) $(LIVE_DECISIONS_ARGS)
 
-backtest: ## Score historical Oracle predictions at T-BACKTEST_OFFSET_S (default T-120s)
+oracle-trade: ## Oracle at T-LIVE_OFFSET_S -> LIMIT BUY at fair value if share > fair value, else MARKET BUY (dry run; CONFIRM=1 for real orders)
+	$(BIN)arbitrage-poly-oracle-trade$(EXE) $(ORACLE_TRADE_ARGS)
+
+aggtrades: $(BINANCE_AGGTRADES) ## Download Binance aggTrades covering the MARKETS period (skipped if present)
+
+$(BINANCE_AGGTRADES): | $(MARKETS)
+	$(PYTHON) scripts/fetch_binance_aggtrades.py --markets $(MARKETS) --output $(BINANCE_AGGTRADES)
+
+backtest: $(BINANCE_AGGTRADES) ## Score historical Oracle predictions at T-BACKTEST_OFFSET_S (default T-120s)
 	$(BIN)arbitrage-poly-backtest$(EXE) $(BACKTEST_ARGS)
 
 calibration: ## Compute calibration bins/daily stats from a backtest CSV
 	$(BIN)arbitrage-poly-calibration$(EXE) $(CALIBRATION_ARGS)
 
-oracle-results: ## Oracle results at T-ORACLE_OFFSET_S (default T-120s) on the last DAYS days (e.g. make oracle-results DAYS=5)
+oracle-results: $(BINANCE_AGGTRADES) ## Oracle results at T-ORACLE_OFFSET_S (default T-120s) on the last DAYS days (e.g. make oracle-results DAYS=5)
 	$(BIN)arbitrage-poly-backtest$(EXE) $(ORACLE_BACKTEST_ARGS)
 	$(BIN)arbitrage-poly-calibration$(EXE) $(ORACLE_CALIBRATION_ARGS)
 	@$(MAKE_TOOLS) daily $(ORACLE_PREFIX)-daily.csv --prefix $(ORACLE_PREFIX)

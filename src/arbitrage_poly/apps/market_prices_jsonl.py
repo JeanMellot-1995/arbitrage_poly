@@ -353,7 +353,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--trades",
         type=Path,
-        default=Path("data/backtesting/polymarket_trades_window_10d.jsonl"),
+        default=Path("src/arbitrage_poly/data/polymarket_trades_window_10d.jsonl"),
     )
     parser.add_argument("--backtest", type=Path, default=Path("data/backtesting/backtest.csv"))
     parser.add_argument("--output", type=Path)

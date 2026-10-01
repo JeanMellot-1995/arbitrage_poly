@@ -602,12 +602,12 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--markets",
         type=Path,
-        default=Path("data/backtesting/polymarket-btc-5m-last-10d.json"),
+        default=Path("src/arbitrage_poly/data/polymarket-btc-5m-last-10d.json"),
     )
     parser.add_argument(
         "--trades",
         type=Path,
-        default=Path("data/backtesting/BTCUSDT-aggTrades-concat.csv"),
+        default=Path("src/arbitrage_poly/data/BTCUSDT-aggTrades-concat.csv"),
     )
     parser.add_argument("--output", type=Path, default=Path("data/backtesting/backtest.csv"))
     parser.add_argument("--report", type=Path, default=Path("data/backtesting/backtest.json"))

@@ -13,9 +13,14 @@ from collections.abc import Callable
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 JsonFetcher = Callable[[str, dict[str, Any]], Any]
+
+# Polymarket's Gamma/CLOB APIs sit behind bot protection that rejects the
+# default urllib User-Agent ("Python-urllib/x.y") with HTTP 403. Any
+# non-empty, browser-like value is accepted.
+_USER_AGENT = "Mozilla/5.0 (compatible; arbitrage-poly/0.1; +read-only)"
 
 
 class PolymarketApiError(RuntimeError):
@@ -27,8 +32,9 @@ def default_json_fetcher(url: str, params: dict[str, Any], *, timeout_s: float =
 
     query = urlencode(params, doseq=True)
     full_url = f"{url}?{query}" if query else url
+    request = Request(full_url, headers={"User-Agent": _USER_AGENT, "Accept": "application/json"})
     try:
-        with urlopen(full_url, timeout=timeout_s) as response:  # noqa: S310 - read-only GET
+        with urlopen(request, timeout=timeout_s) as response:  # noqa: S310 - read-only GET
             payload = response.read()
     except (HTTPError, URLError, TimeoutError) as exc:
         raise PolymarketApiError(f"request failed: {exc}") from exc

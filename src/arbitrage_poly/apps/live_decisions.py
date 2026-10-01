@@ -108,8 +108,14 @@ async def run_live_decisions(
     offset_ns: int,
     on_decision: Callable[[dict[str, object]], None],
     last_decided_window_start_ns: int | None = None,
+    max_late_ns: int | None = None,
 ) -> None:
-    """Record one Oracle decision per window, frozen at ``offset_ns`` before close."""
+    """Record one Oracle decision per window, frozen at ``offset_ns`` before close.
+
+    With ``max_late_ns``, a window whose first post-cutoff tick arrives more than
+    ``max_late_ns`` after the cutoff (e.g. the process started mid-window) is
+    skipped instead of being decided late.
+    """
 
     decided_window_start_ns = last_decided_window_start_ns
     reader_task = asyncio.create_task(reader.run())
@@ -124,6 +130,14 @@ async def run_live_decisions(
             if fair_value.window_start_ns == decided_window_start_ns:
                 continue
             decided_window_start_ns = fair_value.window_start_ns
+            late_ns = offset_ns - fair_value.remaining_ns
+            if max_late_ns is not None and late_ns > max_late_ns:
+                LOGGER.warning(
+                    "decision_skipped_late window=%s late_s=%.1f",
+                    decided_window_start_ns,
+                    late_ns / 1_000_000_000,
+                )
+                continue
             if not oracle.volatility_ready:
                 LOGGER.warning(
                     "decision_before_volatility_warmup window=%s", decided_window_start_ns

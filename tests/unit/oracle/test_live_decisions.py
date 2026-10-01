@@ -185,3 +185,56 @@ def test_resume_skips_window_already_decided() -> None:
         assert decisions[0]["current_price"] == 103.0
 
     asyncio.run(scenario())
+
+
+def test_max_late_skips_window_decided_too_late_but_keeps_next_on_time() -> None:
+    async def scenario() -> None:
+        reader, queue = _make_reader()
+        decisions: list[dict] = []
+
+        def on_decision(row: dict) -> None:
+            decisions.append(row)
+            reader.stop()
+
+        second = 1_000_000_000
+        # Process starts 47s after the T-120s cutoff of the first window: skipped.
+        await queue.put(
+            Tick(
+                ts_ns=WINDOW_START_NS + 227 * second,
+                price=100.0,
+                qty=1.0,
+                source=AGG_TRADE_SOURCE,
+                seq=1,
+            )
+        )
+        next_start = WINDOW_START_NS + WINDOW_NS
+        await queue.put(
+            Tick(ts_ns=next_start, price=100.0, qty=1.0, source=AGG_TRADE_SOURCE, seq=2)
+        )
+        # 1s after the next cutoff: within tolerance, decided.
+        await queue.put(
+            Tick(
+                ts_ns=next_start + 181 * second,
+                price=101.0,
+                qty=1.0,
+                source=AGG_TRADE_SOURCE,
+                seq=3,
+            )
+        )
+
+        await run_live_decisions(
+            reader=reader,
+            oracle=PriceOracle(
+                window_ns=WINDOW_NS,
+                source=AGG_TRADE_SOURCE,
+                volatility_sampling_interval_ns=second,
+            ),
+            offset_ns=OFFSET_NS,
+            on_decision=on_decision,
+            max_late_ns=5 * second,
+        )
+
+        assert len(decisions) == 1
+        assert decisions[0]["window_start_utc"] == "1970-01-01T00:10:00.000000Z"
+
+    asyncio.run(scenario())
